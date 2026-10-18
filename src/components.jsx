@@ -1,5 +1,5 @@
-import React, {useState} from 'react';
-import {BookOpen, Star, Clock3, GraduationCap, Music2, Files, Users, Film, Dumbbell, Search, ExternalLink, ChevronLeft, ChevronRight, X, Settings, RefreshCw, Download, Upload, Check, FolderOpen, Guitar} from 'lucide-react';
+import React, {useRef, useState} from 'react';
+import {BookOpen, Star, Clock3, GraduationCap, Music2, Files, Users, Film, Dumbbell, Search, ExternalLink, ChevronLeft, ChevronRight, X, Settings, RefreshCw, Download, Upload, Check, FolderOpen, Guitar, Info} from 'lucide-react';
 import {api, count, endpoint} from './api';
 import {useDialog} from './useDialog';
 
@@ -8,7 +8,7 @@ const COLLECTION = [['all','Все табулатуры',Files],['artists','Ис
 export function Sidebar({view, setView, stats, settings}) {
   return <aside className="sidebar">
     <a className="brand" href="#" onClick={e=>{e.preventDefault();setView('all')}}><Guitar size={38}/><span>Таботека</span></a>
-    <nav aria-label="Основная навигация">{NAV.map(([id,label,Icon])=><button key={id} className={'nav-item '+(view===id?'active':'')} onClick={()=>setView(id)}><Icon/><span>{label}</span>{id==='favorites'&&stats.favorites>0&&<small>{count(stats.favorites)}</small>}</button>)}</nav>
+    <nav aria-label="Основная навигация">{NAV.map(([id,label,Icon])=>{const total=stats[{favorites:'favorites',learn:'learning',play:'playing'}[id]];return <button key={id} className={'nav-item '+(view===id?'active':'')} onClick={()=>setView(id)}><Icon/><span>{label}</span>{total>0&&<small>{count(total)}</small>}</button>})}</nav>
     <div className="nav-separator"/><div className="rail-label">Коллекция</div>
     <nav aria-label="Разделы коллекции">{COLLECTION.map(([id,label,Icon])=><button key={id} className={'nav-item '+(id!=='all'&&id!=='artists'&&view===id?'active':'')} onClick={()=>setView(id)}><Icon/><span>{label}</span></button>)}</nav>
     <button className="local-state" onClick={settings}><i/> <span>Локальная библиотека</span><ChevronRight size={16}/></button>
@@ -28,32 +28,33 @@ export function ArtistBrowser({artists, artist, setArtist, search, setSearch, op
   </aside>;
 }
 
-export function TabTable({data, loading, title, subtitle, format, setFormat, sort, setSort, onOpen, onFavorite, onDetails, onPage}) {
+export function TabTable({data, loading, title, subtitle, format, setFormat, sort, setSort, onOpen, onFavorite, onPractice, onDetails, onPage}) {
   return <section className="songs" aria-label="Табулатуры">
     <div className="songs-toolbar"><div className="songs-title"><h2>{title}</h2><p>{subtitle}</p></div><div className="table-controls">
       <select aria-label="Формат файлов" value={format} onChange={e=>setFormat(e.target.value)}><option value="">Все форматы</option>{['GP3','GP4','GP5','GPX','GTP','GP'].map(f=><option key={f}>{f}</option>)}</select>
       <select aria-label="Сортировка" value={sort} onChange={e=>setSort(e.target.value)}><option value="name">По названию</option><option value="rating">По оценке сайта</option><option value="recent">Недавно открытые</option><option value="size">По размеру</option></select>
     </div></div>
     <div className={'table-scroll '+(loading?'loading':'')} aria-busy={loading}><table><thead><tr><th>Песня</th><th>Формат</th><th>Оценка</th><th><span className="sr-only">Избранное</span></th><th><span className="sr-only">Открыть</span></th></tr></thead><tbody>
-      {data.items.map(tab=><TabRow key={tab.id} tab={tab} onOpen={onOpen} onFavorite={onFavorite} onDetails={onDetails}/>)}
+      {data.items.map(tab=><TabRow key={tab.id} tab={tab} onOpen={onOpen} onFavorite={onFavorite} onPractice={onPractice} onDetails={onDetails}/>)}
     </tbody></table></div>
-    {!data.items.length&&!loading&&<div className="empty-state"><BookOpen size={32}/><h3>Здесь пока нет табулатур</h3><p>{title==='Избранное'?'Нажмите на звезду рядом с любимым файлом.':'Попробуйте другое название или измените фильтры.'}</p></div>}
+    {!data.items.length&&!loading&&<div className="empty-state"><BookOpen size={32}/><h3>Здесь пока нет табулатур</h3><p>{title==='Избранное'?'Нажмите на звезду рядом с любимым файлом.':['Играю','Разучить'].includes(title)?`Откройте библиотеку и нажмите «${title}» рядом с песней.`:'Попробуйте другое название или измените фильтры.'}</p></div>}
     <footer className="pagination"><span>{data.total?`${count((data.page-1)*40+1)}–${count(Math.min(data.page*40,data.total))} из ${count(data.total)}`:'Нет файлов'}</span><div><button className="button" disabled={data.page<=1||loading} onClick={()=>onPage(data.page-1)}><ChevronLeft size={16}/>Назад</button><span>{data.page} / {count(data.pages)}</span><button className="button" disabled={data.page>=data.pages||loading} onClick={()=>onPage(data.page+1)}>Далее<ChevronRight size={16}/></button></div></footer>
   </section>;
 }
 
-const TabRow=React.memo(function TabRow({tab,onOpen,onFavorite,onDetails}) {
-  return <tr><td><button className="song-name" onClick={()=>onDetails(tab)} title="Заметки, список занятий и сведения о файле">{tab.title}</button><div className="filename" title={tab.path}>{tab.artist} · {tab.filename}</div>{tab.practice&&<span className="practice-label">{tab.practice==='learn'?'Разучить':'Играю'}</span>}</td><td><span className="format-tag">{tab.format}</span></td><td>{tab.score?<a className="rating-value" title={'Оценка gtp-tabs.ru: '+tab.score+' из 5. Совпали версия и размер файла.'} href={tab.source_url} target="_blank" rel="noreferrer"><Star size={13} fill="currentColor"/>{tab.score}<span>/5</span></a>:<span className="no-rating" title={tab.source_url?'На сайте нет оценки':'Оценка ещё не получена или совпадение не подтверждено'}>—</span>}</td><td><button className={'icon-button favorite '+(tab.favorite?'is-favorite':'')} aria-label={(tab.favorite?'Убрать из избранного: ':'В избранное: ')+tab.filename} aria-pressed={Boolean(tab.favorite)} onClick={()=>onFavorite(tab)}><Star size={21} fill={tab.favorite?'currentColor':'none'}/></button></td><td><button className="open-button" aria-label={'Открыть в Guitar Pro: '+tab.filename} onClick={()=>onOpen(tab)}><ExternalLink size={17}/><span>Открыть в Guitar Pro</span></button></td></tr>;
+const TabRow=React.memo(function TabRow({tab,onOpen,onFavorite,onPractice,onDetails}) {
+  const [busy,setBusy]=useState(false),pending=useRef(false);
+  async function changePractice(value){if(pending.current)return;pending.current=true;setBusy(true);try{await onPractice(tab,tab.practice===value?'':value)}finally{pending.current=false;setBusy(false)}}
+  return <tr><td><div className="song-heading"><span className="song-name">{tab.title}</span><button className="icon-button song-details" onClick={()=>onDetails(tab)} aria-label={'Заметки и сведения: '+tab.filename} title="Заметки и сведения о файле"><Info size={16}/></button></div><div className="filename" title={tab.path}>{tab.artist} · {tab.filename}</div><div className="practice-actions" role="group" aria-label={'Список занятий: '+tab.filename} aria-busy={busy}>{[['play','Играю',Music2],['learn','Разучить',GraduationCap]].map(([value,label,Icon])=><button key={value} className={'practice-button '+(tab.practice===value?'selected':'')} aria-label={label+': '+tab.filename} aria-pressed={tab.practice===value} title={(tab.practice===value?'Убрать из списка «':'В список «')+label+'»'} disabled={busy} onClick={()=>changePractice(value)}><Icon size={14}/>{label}</button>)}</div></td><td><span className="format-tag">{tab.format}</span></td><td>{tab.score?<a className="rating-value" title={'Оценка gtp-tabs.ru: '+tab.score+' из 5. Совпали версия и размер файла.'} href={tab.source_url} target="_blank" rel="noreferrer"><Star size={13} fill="currentColor"/>{tab.score}<span>/5</span></a>:<span className="no-rating" title={tab.source_url?'На сайте нет оценки':'Оценка ещё не получена или совпадение не подтверждено'}>—</span>}</td><td><button className={'icon-button favorite '+(tab.favorite?'is-favorite':'')} aria-label={(tab.favorite?'Убрать из избранного: ':'В избранное: ')+tab.filename} aria-pressed={Boolean(tab.favorite)} onClick={()=>onFavorite(tab)}><Star size={21} fill={tab.favorite?'currentColor':'none'}/></button></td><td><button className="open-button" aria-label={'Открыть в Guitar Pro: '+tab.filename} onClick={()=>onOpen(tab)}><ExternalLink size={17}/><span>Открыть в Guitar Pro</span></button></td></tr>;
 });
 
 export function DetailsDrawer({tab,onClose,onSave,onOpen}) {
   const dialogRef=useDialog(onClose);
-  const [notes,setNotes]=useState(tab.notes),[practice,setPractice]=useState(tab.practice),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  async function save(){setBusy(true);setError('');try{await onSave(tab,{notes,practice});onClose()}catch(e){setError(e.message)}finally{setBusy(false)}}
+  const [notes,setNotes]=useState(tab.notes),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  async function save(){setBusy(true);setError('');try{await onSave(tab,{notes});onClose()}catch(e){setError(e.message)}finally{setBusy(false)}}
   return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose()}}><section ref={dialogRef} className="drawer" role="dialog" aria-modal="true" aria-labelledby="details-title"><div className="dialog-top"><span>Табулатура</span><button className="icon-button" aria-label="Закрыть сведения" onClick={onClose}><X/></button></div><h2 id="details-title">{tab.title}</h2><p className="muted">{tab.artist}</p><button className="open-button filled full" onClick={()=>onOpen(tab)}><ExternalLink size={18}/>Открыть в Guitar Pro</button>
     <dl className="file-info"><dt>Формат</dt><dd>{tab.format} · {(tab.bytes/1024).toFixed(2)} КБ</dd><dt>Файл в архиве</dt><dd className="file-path">{tab.path}</dd><dt>Оценка gtp-tabs.ru</dt><dd>{tab.score?`${tab.score} из 5`:tab.source_url?'На сайте нет оценки':'Нет подтверждённой оценки'}</dd>{tab.source_url&&<><dt>Источник</dt><dd><a href={tab.source_url} target="_blank" rel="noreferrer">Страница этой версии <ExternalLink size={13}/></a></dd></>}</dl>
     {tab.title_method&&<dl className="file-info"><dt>Название композиции</dt><dd>{tab.title_source_url?<a href={tab.title_source_url} target="_blank" rel="noreferrer">Подтверждено на gtp-tabs.ru <ExternalLink size={13}/></a>:'Из метаданных файла Guitar Pro'}</dd>{tab.artist_name_source&&<><dt>Имя исполнителя</dt><dd><a href={tab.artist_name_source} target="_blank" rel="noreferrer">Страница исполнителя <ExternalLink size={13}/></a></dd></>}<dt>Поиск</dt><dd>По названию и исходному имени файла</dd></dl>}
-    <label className="field-label">Список занятий<select value={practice} onChange={e=>setPractice(e.target.value)}><option value="">Без списка</option><option value="learn">Разучить</option><option value="play">Играю</option></select></label>
     <label className="field-label">Ваши заметки<textarea autoFocus value={notes} onChange={e=>setNotes(e.target.value)} placeholder="Аппликатура, сложные такты, план занятий…" rows={6} maxLength={20000}/></label>{error&&<p className="error-message" role="alert">{error}</p>}<button className="button filled full" onClick={save} disabled={busy}><Check size={18}/>{busy?'Сохраняем…':'Сохранить'}</button>
   </section></div>;
 }
