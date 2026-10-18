@@ -65,7 +65,7 @@ class IndexTests(ArchiveCase):
         ratings.cache_source('13/test_artist',source_row());lib.scan()
         self.assertEqual(lib.get_tab(self.tab['id'])['score'],4)
     def test_safe_file_is_confined_to_archive(self):
-        self.assertEqual(lib.safe_file(self.tab['id']),self.folder/'song.gp4')
+        self.assertEqual(lib.safe_file(self.tab['id']),(self.folder/'song.gp4').resolve())
         with self.assertRaises(KeyError):lib.safe_file('../../outside')
     def test_symlinks_are_not_indexed(self):
         outside=self.base/'outside.gp5';outside.write_bytes(b'outside')
