@@ -8,6 +8,7 @@ from urllib.error import HTTPError,URLError
 import json,logging,re,threading,time
 from datetime import datetime,timedelta
 import library as lib
+import catalog_names
 
 POOL=ThreadPoolExecutor(max_workers=2,thread_name_prefix='ratings')
 PENDING=set()
@@ -84,7 +85,7 @@ def cache_source(artist_id,source):
         for row in rows:
             # Slug must match exactly, including the version number.
             indexed.setdefault(row['slug'],[]).append(row)
-        tabs=db.execute('SELECT id,filename,bytes FROM tabs WHERE artist_id=? AND available=1',(artist_id,)).fetchall()
+        tabs=db.execute('SELECT id,filename,bytes,mtime FROM tabs WHERE artist_id=? AND available=1',(artist_id,)).fetchall()
         matches=[]
         for tab in tabs:
             slug=PurePosixPath(tab['filename']).stem.replace('_','-').lower()
@@ -96,6 +97,8 @@ def cache_source(artist_id,source):
             # The source can return a partial page. Keep earlier confirmed matches
             # for files absent from this response; scan() invalidates replaced files.
             db.executemany('UPDATE tabs SET score=?,source_url=?,source_id=?,score_synced_at=? WHERE id=?',matches)
+            for proposal in catalog_names.source_matches(tabs,rows,artist_id):
+                catalog_names.write_tab_name(db,proposal,stamp)
             db.execute('UPDATE artists SET synced_at=?,sync_error=NULL WHERE id=?',(stamp,artist_id))
     # Keep a compact metadata snapshot for reproducibility, not whole web pages.
     try:
@@ -111,7 +114,7 @@ def cache_source(artist_id,source):
 def sync_artist(artist_id):
     try:
         with lib.WRITE_LOCK,lib.connection() as db:
-            row=db.execute('SELECT source_url FROM artists WHERE id=?',(artist_id,)).fetchone()
+            row=db.execute('SELECT coalesce(name_source_url,source_url) source_url FROM artists WHERE id=?',(artist_id,)).fetchone()
             with db:db.execute('UPDATE artists SET last_attempt_at=? WHERE id=?',(time.time(),artist_id))
         if not row:raise ValueError('Исполнитель не найден')
         return cache_source(artist_id,fetch(row['source_url']))

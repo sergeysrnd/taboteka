@@ -19,7 +19,7 @@ function App(){
   useEffect(()=>{const handler=e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();searchRef.current?.focus()}};document.addEventListener('keydown',handler);return()=>document.removeEventListener('keydown',handler)},[]);
   useEffect(()=>{if(!boot)return;const timer=setInterval(()=>refreshStats().catch(()=>{}),4000);return()=>clearInterval(timer)},[Boolean(boot),refreshStats]);
   const stats=boot?.stats||{},syncState=boot?.ratings||{};
-  useEffect(()=>{if(!boot)return;refresh()},[stats.matched,stats.rated,syncState.pending?.join(','),refresh]);
+  useEffect(()=>{if(!boot)return;refresh()},[stats.matched,stats.rated,stats.named,stats.named_artists,syncState.pending?.join(','),refresh]);
   useEffect(()=>{if(!boot)return;const controller=new AbortController();setLoading(true);const p=new URLSearchParams({view:view==='artists'?'all':view,artist,q:query,format,sort,page});api('/api/tabs?'+p,undefined,controller.signal).then(r=>{setData(r);setLoading(false)}).catch(e=>{if(e.name!=='AbortError'){notify(e.message,true);setLoading(false)}});return()=>controller.abort()},[Boolean(boot),view,artist,query,format,sort,page,revision,notify]);
   useEffect(()=>{if(!boot)return;const c=new AbortController();setArtistLoading(true);api('/api/artists?'+new URLSearchParams({view:view==='artists'?'all':view,q:query,aq:artistQuery}),undefined,c.signal).then(r=>{setArtists(r);setArtistLoading(false)}).catch(e=>{if(e.name!=='AbortError'){notify(e.message,true);setArtistLoading(false)}});return()=>c.abort()},[Boolean(boot),view,query,artistQuery,revision,notify]);
   useEffect(()=>{if(boot&&artist)api('/api/ratings',{artist}).then(()=>refreshStats()).catch(()=>{})},[Boolean(boot),artist,refreshStats]);

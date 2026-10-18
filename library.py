@@ -2,6 +2,10 @@
 from pathlib import Path
 import contextlib, hashlib, json, math, os, re, sqlite3, threading, time, unicodedata
 
+def catalog_sort(value):
+    value=unicodedata.normalize('NFKC',value or '').casefold().replace('ё','е')
+    return re.sub(r'\d+',lambda m: str(int(m[0])).zfill(20),value)
+
 BASE = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('TABOTEKA_DATA_DIR',str(BASE / 'data')))
 DATA.mkdir(parents=True,exist_ok=True)
@@ -39,6 +43,7 @@ def category(bucket):
 def connection():
     db=sqlite3.connect(DB,timeout=30)
     db.row_factory=sqlite3.Row
+    db.create_function('catalog_sort',1,catalog_sort,deterministic=True)
     db.execute('PRAGMA foreign_keys=ON')
     try:
         yield db
@@ -59,6 +64,14 @@ def initialize():
         columns={row['name'] for row in db.execute('PRAGMA table_info(artists)')}
         if 'last_attempt_at' not in columns:
             db.execute('ALTER TABLE artists ADD COLUMN last_attempt_at REAL')
+        additions={
+            'artists':{'display_name':'TEXT','name_source_url':'TEXT','name_method':'TEXT','name_updated_at':'TEXT','name_search':"TEXT NOT NULL DEFAULT ''"},
+            'tabs':{'display_title':'TEXT','title_source_url':'TEXT','title_method':'TEXT','title_updated_at':'TEXT','name_search':"TEXT NOT NULL DEFAULT ''"},
+        }
+        for table,fields in additions.items():
+            existing={row['name'] for row in db.execute('PRAGMA table_info('+table+')')}
+            for column,declaration in fields.items():
+                if column not in existing:db.execute('ALTER TABLE '+table+' ADD COLUMN '+column+' '+declaration)
         db.commit()
 
 def scan():
@@ -115,6 +128,11 @@ def scan():
                   source_url=CASE WHEN tabs.bytes!=excluded.bytes OR tabs.mtime!=excluded.mtime THEN NULL ELSE tabs.source_url END,
                   source_id=CASE WHEN tabs.bytes!=excluded.bytes OR tabs.mtime!=excluded.mtime THEN NULL ELSE tabs.source_id END,
                   score_synced_at=CASE WHEN tabs.bytes!=excluded.bytes OR tabs.mtime!=excluded.mtime THEN NULL ELSE tabs.score_synced_at END,
+                  display_title=CASE WHEN tabs.bytes!=excluded.bytes OR tabs.mtime!=excluded.mtime THEN NULL ELSE tabs.display_title END,
+                  title_source_url=CASE WHEN tabs.bytes!=excluded.bytes OR tabs.mtime!=excluded.mtime THEN NULL ELSE tabs.title_source_url END,
+                  title_method=CASE WHEN tabs.bytes!=excluded.bytes OR tabs.mtime!=excluded.mtime THEN NULL ELSE tabs.title_method END,
+                  title_updated_at=CASE WHEN tabs.bytes!=excluded.bytes OR tabs.mtime!=excluded.mtime THEN NULL ELSE tabs.title_updated_at END,
+                  name_search=CASE WHEN tabs.bytes!=excluded.bytes OR tabs.mtime!=excluded.mtime THEN '' ELSE tabs.name_search END,
                   bytes=excluded.bytes,mtime=excluded.mtime''',rows)
                 # A replacement/new file needs source metadata even if its artist cache is fresh.
                 db.executemany('UPDATE artists SET synced_at=NULL WHERE id=?',[(a,) for a in changed_artists])
@@ -129,8 +147,12 @@ def stats():
         r=dict(db.execute('''SELECT count(*) files, count(DISTINCT artist_id) artists,coalesce(sum(bytes),0) bytes,
           coalesce(sum(favorite),0) favorites,coalesce(sum(practice='learn'),0) learning,coalesce(sum(practice='play'),0) playing,
           coalesce(sum(opened_at IS NOT NULL),0) recent,coalesce(sum(score IS NOT NULL),0) rated,
-          coalesce(sum(source_url IS NOT NULL),0) matched FROM tabs WHERE available=1''').fetchone())
+          coalesce(sum(source_url IS NOT NULL),0) matched,
+          coalesce(sum(display_title IS NOT NULL),0) named,
+          coalesce(sum(title_method='source_exact'),0) source_named,
+          coalesce(sum(title_method='file_header'),0) header_named FROM tabs WHERE available=1''').fetchone())
         r['synced_artists']=db.execute('SELECT count(*) FROM artists WHERE synced_at IS NOT NULL AND count>0').fetchone()[0]
+        r['named_artists']=db.execute('SELECT count(*) FROM artists WHERE display_name IS NOT NULL AND count>0').fetchone()[0]
         r['scanned_at']=db.execute("SELECT value FROM meta WHERE key='scanned_at'").fetchone()
         r['scanned_at']=r['scanned_at'][0] if r['scanned_at'] else None
         return r
@@ -147,34 +169,41 @@ def _filters(args):
     fmt=args.get('format','')
     if fmt: clauses.append('t.format=?');values.append(fmt)
     for token in normalized(args.get('q','')).split():
-        clauses.append('(t.search LIKE ? OR a.search LIKE ?)'); values.extend(['%'+token+'%']*2)
+        clauses.append('(t.search LIKE ? OR a.search LIKE ? OR t.name_search LIKE ? OR a.name_search LIKE ?)'); values.extend(['%'+token+'%']*4)
     return ' AND '.join(clauses),values
 
 def list_tabs(args):
     where,values=_filters(args)
     page=max(1,min(100000,int(args.get('page',1)))); size=40
-    order={'name':'a.name COLLATE NOCASE,t.title COLLATE NOCASE,t.filename','rating':'t.score IS NULL,t.score DESC,a.name,t.title','recent':'t.opened_at DESC','size':'t.bytes DESC'}.get(args.get('sort',''),'t.opened_at DESC' if args.get('view')=='recent' else 'a.name COLLATE NOCASE,t.title COLLATE NOCASE,t.filename')
+    by_name='catalog_sort(coalesce(a.display_name,a.name)),catalog_sort(coalesce(t.display_title,t.title)),t.filename'
+    order={'name':by_name,'rating':'t.score IS NULL,t.score DESC,'+by_name,'recent':'t.opened_at DESC','size':'t.bytes DESC'}.get(args.get('sort',''),'t.opened_at DESC' if args.get('view')=='recent' else by_name)
     with connection() as db:
         total=db.execute('SELECT count(*) FROM tabs t JOIN artists a ON a.id=t.artist_id WHERE '+where,values).fetchone()[0]
         page=min(page,max(1,(total+size-1)//size))
-        rows=db.execute('''SELECT t.*,a.name artist,a.category FROM tabs t JOIN artists a ON a.id=t.artist_id WHERE '''+where+' ORDER BY '+order+' LIMIT ? OFFSET ?',values+[size,(page-1)*size]).fetchall()
-        return {'items':[dict(r) for r in rows],'total':total,'page':page,'pages':max(1,(total+size-1)//size)}
+        rows=db.execute('''SELECT t.*,coalesce(a.display_name,a.name) artist,a.name original_artist,a.name_source_url artist_name_source,a.category FROM tabs t JOIN artists a ON a.id=t.artist_id WHERE '''+where+' ORDER BY '+order+' LIMIT ? OFFSET ?',values+[size,(page-1)*size]).fetchall()
+        return {'items':[_display_tab(r) for r in rows],'total':total,'page':page,'pages':max(1,(total+size-1)//size)}
 
 def list_artists(args):
     # Count within the current collection/search so the artist column stays relevant.
     args=dict(args);args.pop('artist',None);args.pop('format',None)
     where,values=_filters(args)
     for token in normalized(args.get('aq','')).split():
-        where+=' AND a.search LIKE ?';values.append('%'+token+'%')
+        where+=' AND (a.search LIKE ? OR a.name_search LIKE ?)';values.extend(['%'+token+'%']*2)
     with connection() as db:
-        rows=db.execute('''SELECT a.*,count(t.id) filtered_count FROM artists a JOIN tabs t ON t.artist_id=a.id WHERE '''+where+' GROUP BY a.id ORDER BY filtered_count DESC,a.name LIMIT 250',values).fetchall()
-        return [dict(r) for r in rows]
+        rows=db.execute('''SELECT a.*,count(t.id) filtered_count FROM artists a JOIN tabs t ON t.artist_id=a.id WHERE '''+where+' GROUP BY a.id ORDER BY filtered_count DESC,catalog_sort(coalesce(a.display_name,a.name)) LIMIT 250',values).fetchall()
+        return [{**dict(r),'original_name':r['name'],'name':r['display_name'] or r['name']} for r in rows]
+
+def _display_tab(row):
+    tab=dict(row)
+    tab['original_title']=tab['title']
+    tab['title']=tab['display_title'] or tab['title']
+    return tab
 
 def get_tab(tab_id):
     with connection() as db:
-        row=db.execute('SELECT t.*,a.name artist FROM tabs t JOIN artists a ON a.id=t.artist_id WHERE t.id=? AND available=1',(tab_id,)).fetchone()
+        row=db.execute('SELECT t.*,coalesce(a.display_name,a.name) artist,a.name original_artist,a.name_source_url artist_name_source FROM tabs t JOIN artists a ON a.id=t.artist_id WHERE t.id=? AND available=1',(tab_id,)).fetchone()
         if not row:raise KeyError('Файл не найден в каталоге')
-        return dict(row)
+        return _display_tab(row)
 
 def safe_file(tab_id):
     tab=get_tab(tab_id)
