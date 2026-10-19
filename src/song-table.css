@@ -1,0 +1,71 @@
+.songs{container-type:inline-size}
+.song-table{table-layout:fixed;min-width:0}
+.song-table th{font-size:10px;letter-spacing:.65px}
+.song-table th:first-child{width:auto}
+.song-table .format-column{width:54px}
+.song-table .rating-column{width:64px}
+.song-table .actions-column{width:342px}
+.song-table td{height:78px;padding:14px 12px 14px 0;vertical-align:middle}
+.song-table td:first-child{min-width:0;max-width:none;padding-right:20px}
+.song-table td:last-child{padding-right:0}
+.song-table .song-name{font-size:14px;font-weight:600;line-height:1.45;overflow-wrap:anywhere}
+.song-table .song-name:hover{color:#17271d;text-decoration:none}
+.song-table .filename{max-width:100%;margin-top:4px;font-size:11px;line-height:1.5}
+.song-table .format-tag{padding:4px 6px;font-size:10px}
+.song-table .rating-value{font-size:12px;gap:3px}
+.song-table .rating-value span{display:inline;font-size:10px}
+.song-table .rating-value svg{width:12px;height:12px}
+.row-actions,.file-actions{display:flex;align-items:center;gap:10px}
+.row-actions{justify-content:flex-end}
+.file-actions{gap:3px}
+.row-actions .practice-actions{display:inline-flex;flex-wrap:nowrap;align-items:center;gap:0;margin:0;padding:2px;border:1px solid #dce5df;border-radius:7px;background:#f6f8f7}
+.row-actions .practice-button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:30px;margin:0;padding:5px 8px;border:0;border-radius:4px;background:transparent;color:#5a6e62;font-size:11px;font-weight:400;line-height:20px;white-space:nowrap}
+.row-actions .practice-button:first-child{width:69px}
+.row-actions .practice-button:last-child{width:84px}
+.row-actions .practice-button svg{width:14px;height:14px}
+.row-actions .practice-button:hover:not(:disabled){background:#eaf1ed;color:#225d49}
+.row-actions .practice-button.selected{background:#225d49;color:#fff;font-weight:600;box-shadow:0 1px 2px #173f3020}
+.row-actions .practice-button:disabled{opacity:.6}
+.row-actions .practice-actions[aria-busy=true]{cursor:progress}
+.row-actions .icon-button{width:34px;min-width:34px;height:36px;min-height:36px;padding:7px;border-radius:6px}
+.row-actions .favorite{color:#65786b}
+.row-actions .favorite.is-favorite{color:#bd9237}
+.row-actions .song-details{margin:0;color:#829086}
+.row-actions .open-button{display:inline-flex;width:92px;height:36px;min-height:36px;margin-left:5px;padding:7px 10px;border-radius:6px;font-size:11px;gap:7px}
+.row-actions .open-button span{display:inline}
+.row-actions .open-button svg{width:16px;height:16px}
+
+/* Adapt to the table's space, including when the artist pane is visible. */
+@container (max-width:660px){
+  .song-table .actions-column{width:280px}
+  .song-table .format-column{width:48px}
+  .song-table .rating-column{width:54px}
+  .song-table td:first-child{padding-right:14px}
+  .row-actions{gap:8px}
+  .row-actions .open-button{width:36px;padding:8px;margin-left:3px}
+  .row-actions .open-button span{display:none}
+}
+
+@container (max-width:520px){
+  .song-table,.song-table tbody{display:block;width:100%}
+  .song-table thead{display:none}
+  .song-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;column-gap:12px;row-gap:12px;padding:15px 0;border-bottom:1px solid var(--line)}
+  .song-table td,.song-table td:first-child,.song-table td:last-child{height:auto;min-width:0;max-width:none;padding:0;border:0;background:transparent}
+  .song-table tr:hover{background:#fafcfb}
+  .song-table .song-identity{grid-column:1}
+  .song-table .song-format{grid-column:2}
+  .song-table .song-rating{grid-column:3;min-width:36px}
+  .song-table .song-actions{grid-column:1/-1}
+  .song-table .song-name{font-size:13px}
+  .song-table .filename{font-size:10px}
+  .row-actions{justify-content:space-between}
+}
+
+@container (max-width:300px){
+  .row-actions{gap:6px}
+  .row-actions .practice-button{gap:4px;padding:5px 6px;font-size:10px}
+  .row-actions .practice-button:first-child{width:61px}
+  .row-actions .practice-button:last-child{width:75px}
+  .row-actions .icon-button{width:32px;min-width:32px}
+  .row-actions .open-button{width:32px;margin-left:0;padding:7px}
+}

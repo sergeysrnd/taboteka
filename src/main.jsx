@@ -4,6 +4,7 @@ import {Home,ChevronRight,RefreshCw,Settings,Search,Users,X,CloudDownload,CheckC
 import {api,setToken,count,plural} from './api';
 import {Sidebar,ArtistBrowser,TabTable,DetailsDrawer,SettingsDialog} from './components';
 import './styles.css';
+import './song-table.css';
 
 const LABELS={all:'Библиотека',artists:'Исполнители',favorites:'Избранное',recent:'Недавние',learn:'Разучить',play:'Играю',soundtracks:'Саундтреки',lessons:'Упражнения',local:'Местные исполнители'};
 const EMPTY={items:[],total:0,page:1,pages:1};

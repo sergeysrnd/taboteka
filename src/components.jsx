@@ -34,7 +34,7 @@ export function TabTable({data, loading, title, subtitle, format, setFormat, sor
       <select aria-label="Формат файлов" value={format} onChange={e=>setFormat(e.target.value)}><option value="">Все форматы</option>{['GP3','GP4','GP5','GPX','GTP','GP'].map(f=><option key={f}>{f}</option>)}</select>
       <select aria-label="Сортировка" value={sort} onChange={e=>setSort(e.target.value)}><option value="name">По названию</option><option value="rating">По оценке сайта</option><option value="recent">Недавно открытые</option><option value="size">По размеру</option></select>
     </div></div>
-    <div className={'table-scroll '+(loading?'loading':'')} aria-busy={loading}><table><thead><tr><th>Песня</th><th>Формат</th><th>Оценка</th><th><span className="sr-only">Избранное</span></th><th><span className="sr-only">Открыть</span></th></tr></thead><tbody>
+    <div className={'table-scroll '+(loading?'loading':'')} aria-busy={loading}><table className="song-table"><thead><tr><th>Песня</th><th className="format-column">Формат</th><th className="rating-column">Оценка</th><th className="actions-column"><span className="sr-only">Действия</span></th></tr></thead><tbody>
       {data.items.map(tab=><TabRow key={tab.id} tab={tab} onOpen={onOpen} onFavorite={onFavorite} onPractice={onPractice} onDetails={onDetails}/>)}
     </tbody></table></div>
     {!data.items.length&&!loading&&<div className="empty-state"><BookOpen size={32}/><h3>Здесь пока нет табулатур</h3><p>{title==='Избранное'?'Нажмите на звезду рядом с любимым файлом.':['Играю','Разучить'].includes(title)?`Откройте библиотеку и нажмите «${title}» рядом с песней.`:'Попробуйте другое название или измените фильтры.'}</p></div>}
@@ -45,7 +45,21 @@ export function TabTable({data, loading, title, subtitle, format, setFormat, sor
 const TabRow=React.memo(function TabRow({tab,onOpen,onFavorite,onPractice,onDetails}) {
   const [busy,setBusy]=useState(false),pending=useRef(false);
   async function changePractice(value){if(pending.current)return;pending.current=true;setBusy(true);try{await onPractice(tab,tab.practice===value?'':value)}finally{pending.current=false;setBusy(false)}}
-  return <tr><td><div className="song-heading"><span className="song-name">{tab.title}</span><button className="icon-button song-details" onClick={()=>onDetails(tab)} aria-label={'Заметки и сведения: '+tab.filename} title="Заметки и сведения о файле"><Info size={16}/></button></div><div className="filename" title={tab.path}>{tab.artist} · {tab.filename}</div><div className="practice-actions" role="group" aria-label={'Список занятий: '+tab.filename} aria-busy={busy}>{[['play','Играю',Music2],['learn','Разучить',GraduationCap]].map(([value,label,Icon])=><button key={value} className={'practice-button '+(tab.practice===value?'selected':'')} aria-label={label+': '+tab.filename} aria-pressed={tab.practice===value} title={(tab.practice===value?'Убрать из списка «':'В список «')+label+'»'} disabled={busy} onClick={()=>changePractice(value)}><Icon size={14}/>{label}</button>)}</div></td><td><span className="format-tag">{tab.format}</span></td><td>{tab.score?<a className="rating-value" title={'Оценка gtp-tabs.ru: '+tab.score+' из 5. Совпали версия и размер файла.'} href={tab.source_url} target="_blank" rel="noreferrer"><Star size={13} fill="currentColor"/>{tab.score}<span>/5</span></a>:<span className="no-rating" title={tab.source_url?'На сайте нет оценки':'Оценка ещё не получена или совпадение не подтверждено'}>—</span>}</td><td><button className={'icon-button favorite '+(tab.favorite?'is-favorite':'')} aria-label={(tab.favorite?'Убрать из избранного: ':'В избранное: ')+tab.filename} aria-pressed={Boolean(tab.favorite)} onClick={()=>onFavorite(tab)}><Star size={21} fill={tab.favorite?'currentColor':'none'}/></button></td><td><button className="open-button" aria-label={'Открыть в Guitar Pro: '+tab.filename} onClick={()=>onOpen(tab)}><ExternalLink size={17}/><span>Открыть в Guitar Pro</span></button></td></tr>;
+  return <tr>
+    <td className="song-identity"><span className="song-name">{tab.title}</span><div className="filename" title={tab.artist+' · '+tab.path}>{tab.artist} · {tab.filename}</div></td>
+    <td className="song-format"><span className="format-tag">{tab.format}</span></td>
+    <td className="song-rating">{tab.score?<a className="rating-value" title={'Оценка gtp-tabs.ru: '+tab.score+' из 5. Совпали версия и размер файла.'} href={tab.source_url} target="_blank" rel="noreferrer"><Star size={13} fill="currentColor"/>{tab.score}<span>/5</span></a>:<span className="no-rating" title={tab.source_url?'На сайте нет оценки':'Оценка ещё не получена или совпадение не подтверждено'}>—</span>}</td>
+    <td className="song-actions"><div className="row-actions">
+      <div className="practice-actions" role="group" aria-label={'Список занятий: '+tab.filename} aria-busy={busy}>
+        {[['play','Играю',Music2],['learn','Разучить',GraduationCap]].map(([value,label,Icon])=><button key={value} className={'practice-button '+(tab.practice===value?'selected':'')} aria-label={label+': '+tab.filename} aria-pressed={tab.practice===value} title={(tab.practice===value?'Убрать из списка «':'В список «')+label+'»'} disabled={busy} onClick={()=>changePractice(value)}><Icon size={14}/>{label}</button>)}
+      </div>
+      <div className="file-actions">
+        <button className={'icon-button favorite '+(tab.favorite?'is-favorite':'')} aria-label={(tab.favorite?'Убрать из избранного: ':'В избранное: ')+tab.filename} title={tab.favorite?'Убрать из избранного':'В избранное'} aria-pressed={Boolean(tab.favorite)} onClick={()=>onFavorite(tab)}><Star size={19} fill={tab.favorite?'currentColor':'none'}/></button>
+        <button className="icon-button song-details" onClick={()=>onDetails(tab)} aria-label={'Заметки и сведения: '+tab.filename} title="Заметки и сведения о файле"><Info size={17}/></button>
+        <button className="open-button" aria-label={'Открыть в Guitar Pro: '+tab.filename} title="Открыть в Guitar Pro" onClick={()=>onOpen(tab)}><ExternalLink size={16}/><span>Открыть</span></button>
+      </div>
+    </div></td>
+  </tr>;
 });
 
 export function DetailsDrawer({tab,onClose,onSave,onOpen}) {
